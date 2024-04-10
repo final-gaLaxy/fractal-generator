@@ -1,6 +1,9 @@
+#[macro_use]
 extern crate glium;
 
 use glium::{implement_vertex, Surface};
+use winit::event::WindowEvent::{CloseRequested, Resized};
+use winit::event::Event::WindowEvent;
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -46,8 +49,11 @@ fn main() {
     // Handle window events
     let _ = event_loop.run(move |event, window_target| {
         match event {
-            winit::event::Event::WindowEvent { event, .. } => match event {
-                winit::event::WindowEvent::CloseRequested => window_target.exit(),
+            WindowEvent { event, .. } => match event {
+                CloseRequested => window_target.exit(),
+                Resized(window_size) => {
+                    display.resize(window_size.into())
+                },
                 _ => (),
             },
             _ => (),
