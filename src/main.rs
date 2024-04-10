@@ -1,10 +1,15 @@
 extern crate glium;
 extern crate winit;
 
+use glium::Surface;
+
 fn main() {
     let event_loop = winit::event_loop::EventLoopBuilder::new().build().expect("event loop building");
-
     let (_window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(&event_loop);
+
+    let mut target = display.draw();
+    target.clear_color(0.0, 0.0, 1.0, 1.0);
+    target.finish().unwrap();
 
     let _ = event_loop.run(move |event, window_target| {
         match event {
