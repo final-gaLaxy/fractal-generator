@@ -42,8 +42,14 @@ fn main() {
 
     let mut target = display.draw();
     target.clear_color(0.0, 0.0, 1.0, 1.0);
-    target.draw(&vertex_buffer, &indices, &program, &glium::uniforms::EmptyUniforms,
+
+    let uniforms = uniform! {
+        u_screenSize: display.get_framebuffer_dimensions()
+    };
+
+    target.draw(&vertex_buffer, &indices, &program, &uniforms,
         &Default::default()).unwrap();
+
     target.finish().unwrap();
 
     // Handle window events
