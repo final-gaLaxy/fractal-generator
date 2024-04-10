@@ -30,21 +30,34 @@ fn main() {
         include_str!("fragment.glsl"),
         None).unwrap();
 
-    // Render triangle
-    let shape = vec![
-        Vertex { a_position: [-0.5, -0.5] },
-        Vertex { a_position: [ 0.0,  0.5] },
-        Vertex { a_position: [ 0.5, -0.5] }
+    // Render Square
+    let vertices = vec![
+        Vertex { a_position: [-1.0, -1.0] },
+        Vertex { a_position: [ 1.0, -1.0] },
+        Vertex { a_position: [ 1.0,  1.0] },
+        Vertex { a_position: [-1.0,  1.0] }
     ];
 
-    let vertex_buffer = glium::VertexBuffer::new(&display, &shape).unwrap();
-    let indices = glium::index::NoIndices(glium::index::PrimitiveType::TrianglesList);
+    let indices: [u32; 6] =  [
+        0, 1, 2,
+        0, 2, 3
+    ];
+
+    let vertex_buffer = glium::VertexBuffer::new(
+        &display,
+        &vertices).unwrap();
+    let indices = glium::IndexBuffer::new(
+        &display,
+        glium::index::PrimitiveType::TrianglesList,
+        &indices).unwrap();
 
     let mut target = display.draw();
-    target.clear_color(0.0, 0.0, 1.0, 1.0);
+    target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+    let screen_size = display.get_framebuffer_dimensions();
 
     let uniforms = uniform! {
-        u_screenSize: display.get_framebuffer_dimensions()
+        u_screenSize: [screen_size.0 as f32, screen_size.1 as f32]
     };
 
     target.draw(&vertex_buffer, &indices, &program, &uniforms,
