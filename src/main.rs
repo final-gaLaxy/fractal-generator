@@ -1,21 +1,33 @@
-#[macro_use]
 extern crate glium;
 
 use glium::{implement_vertex, Surface};
 
+#[derive(Copy, Clone)]
+struct Vertex {
+    a_position: [f32; 2],
+}
+implement_vertex!(Vertex, a_position);
+
 fn main() {
-    let event_loop = winit::event_loop::EventLoopBuilder::new().build().expect("event loop building");
-    let (_window, display) = glium::backend::glutin::SimpleWindowBuilder::new().build(&event_loop);
+    // Create event loop
+    let event_loop = winit::event_loop::EventLoopBuilder::new()
+    .build()
+    .expect("event loop building");
+
+    // Create window
+    let (_window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
+        .with_title("Fractal Generator")
+        .with_inner_size(800, 800)
+        .build(&event_loop);
 
     // Compile shaders
-    let program = glium::Program::from_source(&display, include_str!("vertex.glsl"), include_str!("fragment.glsl"), None).unwrap();
+    let program = glium::Program::from_source(
+        &display,
+        include_str!("vertex.glsl"),
+        include_str!("fragment.glsl"),
+        None).unwrap();
 
-    #[derive(Copy, Clone)]
-    struct Vertex {
-        a_position: [f32; 2],
-    }
-    implement_vertex!(Vertex, a_position);
-
+    // Render triangle
     let shape = vec![
         Vertex { a_position: [-0.5, -0.5] },
         Vertex { a_position: [ 0.0,  0.5] },
@@ -31,6 +43,7 @@ fn main() {
         &Default::default()).unwrap();
     target.finish().unwrap();
 
+    // Handle window events
     let _ = event_loop.run(move |event, window_target| {
         match event {
             winit::event::Event::WindowEvent { event, .. } => match event {
