@@ -1,5 +1,4 @@
 extern crate glium;
-extern crate winit;
 
 use glium::Surface;
 
