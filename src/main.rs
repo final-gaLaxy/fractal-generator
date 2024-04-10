@@ -2,8 +2,8 @@
 extern crate glium;
 
 use glium::{implement_vertex, Surface};
-use winit::event::WindowEvent::{CloseRequested, Resized};
-use winit::event::Event::WindowEvent;
+use winit::event::WindowEvent::{CloseRequested, Resized, RedrawRequested};
+use winit::event::Event::{WindowEvent, AboutToWait};
 
 #[derive(Copy, Clone)]
 struct Vertex {
@@ -18,7 +18,7 @@ fn main() {
     .expect("event loop building");
 
     // Create window
-    let (_window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
+    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
         .with_title("Fractal Generator")
         .with_inner_size(800, 800)
         .build(&event_loop);
@@ -51,20 +51,6 @@ fn main() {
         glium::index::PrimitiveType::TrianglesList,
         &indices).unwrap();
 
-    let mut target = display.draw();
-    target.clear_color(1.0, 1.0, 1.0, 1.0);
-
-    let screen_size = display.get_framebuffer_dimensions();
-
-    let uniforms = uniform! {
-        u_screenSize: [screen_size.0 as f32, screen_size.1 as f32]
-    };
-
-    target.draw(&vertex_buffer, &indices, &program, &uniforms,
-        &Default::default()).unwrap();
-
-    target.finish().unwrap();
-
     // Handle window events
     let _ = event_loop.run(move |event, window_target| {
         match event {
@@ -73,7 +59,25 @@ fn main() {
                 Resized(window_size) => {
                     display.resize(window_size.into())
                 },
-                _ => (),
+                RedrawRequested => {
+                    let mut target = display.draw();
+                    target.clear_color(1.0, 1.0, 1.0, 1.0);
+
+                    let screen_size = display.get_framebuffer_dimensions();
+
+                    let uniforms = uniform! {
+                        u_screenSize: [screen_size.0 as f32, screen_size.1 as f32]
+                    };
+
+                    target.draw(&vertex_buffer, &indices, &program, &uniforms,
+                        &Default::default()).unwrap();
+
+                    target.finish().unwrap();
+                },
+                _ => ()
+            },
+            AboutToWait => {
+                window.request_redraw();
             },
             _ => (),
         };
