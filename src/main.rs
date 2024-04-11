@@ -1,5 +1,6 @@
 #[macro_use]
 extern crate glium;
+extern crate glow;
 
 use glium::{implement_vertex, Surface};
 use winit::event::WindowEvent::{CloseRequested, Resized, RedrawRequested};
