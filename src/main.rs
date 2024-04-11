@@ -26,8 +26,8 @@ fn main() {
     // Compile shaders
     let program = glium::Program::from_source(
         &display,
-        include_str!("vertex.glsl"),
-        include_str!("fragment.glsl"),
+        include_str!("simple.vert"),
+        include_str!("koch_snowflake.frag"),
         None).unwrap();
 
     // Render Square
