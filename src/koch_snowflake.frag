@@ -4,7 +4,7 @@ uniform vec2 u_screenSize; // screen size in pixels
 
 layout(location = 0) out vec4 o_colour;	// output to colour buffer
 
-int MAX_ITERATIONS = 100; // Number of iterations for the function to be run (must be greater than 0)
+int MAX_ITERATIONS = 4; // Number of iterations for the function to be run (must be greater than 0)
 
 bool in_triangle(vec2 p, vec2 a, vec2 b, vec2 c) {
    /*
@@ -44,20 +44,53 @@ bool in_triangle(vec2 p, vec2 a, vec2 b, vec2 c) {
 
 float sin60 = sqrt(3)/2; // sin(60deg)
 
-bool koch_curve(vec2 p, vec2 segStart, vec2 segEnd) {
-   // Create a equilateral triangle from segment
+bool koch_curve(in vec2 p, inout vec2 segStart, inout vec2 segEnd) {
+   // Ignore if outside likely area
    vec2 seg = segEnd - segStart;
+   vec2 t = seg/2 + segStart + vec2(segStart.y - segEnd.y, segEnd.x - segStart.x) * sin60;
+   if (!in_triangle(p, segStart, segEnd, t)) {
+      return false;
+   }
+
+   vec2 Q = segEnd - seg * dot(segEnd - p, seg)/dot(seg,seg);
+
+   float len = distance(segStart, segEnd)/3 * sin60;
+   if (distance(Q, p) >= len) {
+      return false;
+   }
+
+   // Create a equilateral triangle from segment
    vec2 a =   seg/3 + segStart;
    vec2 b = 2*seg/3 + segStart;
-   vec2 c =   seg/2 + segStart + vec2(segStart.y - segEnd.y, segEnd.x - segStart.x)/3.0 * sin60;
-   // vec2 c = vec2(-0.539,0.144);
+   vec2 c =   seg/2 + segStart + vec2(segStart.y - segEnd.y, segEnd.x - segStart.x)/3 * sin60;
 
    if (in_triangle(p, a, b, c)) {
       return true;
    }
    else {
-      return false;
+      // check if left or right side
+      float side = dot(seg, vec2(p.x - c.x, p.y - c.y));
+      if(side < 0) {
+         // Left
+         if (distance(c, p) < distance(segStart, p)) {
+            segStart = a;
+            segEnd = c;
+         }
+         else {
+            segEnd = a;
+         }
+      } else {
+         // Right
+         if (distance(c, p) < distance(segEnd, p)) {
+            segStart = c;
+            segEnd = b;
+         }
+         else {
+            segStart = b;
+         }
+      }
    }
+   return false;
 }
 
 vec2 center = vec2(0,sin60/4);
@@ -75,11 +108,17 @@ void main() {
    // check in initial triangle
    if (in_triangle(p, a, b, c)) {
       o_colour = vec4(0.0, 0.0, 0.0, 1.0);
-   }
+   } else {
+      bool result = false;
+      for (int i = 0; i < MAX_ITERATIONS && !result; i++) {
+         result = koch_curve(p, a, b);
+      }
 
-   if (koch_curve(p, a, b) ||
-       koch_curve(p, b, c) ||
-       koch_curve(p, c, a)) {
-      o_colour = vec4(0.0, 0.0, 0.0, 1.0);
+      if (result) {
+         o_colour = vec4(0.0, 0.0, 0.0, 1.0);
+      }
    }
+   /*
+
+   */
 }
