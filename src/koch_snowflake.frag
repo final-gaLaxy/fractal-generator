@@ -109,6 +109,18 @@ void main() {
    if (in_triangle(p, a, b, c)) {
       o_colour = vec4(0.0, 0.0, 0.0, 1.0);
    } else {
+      // determine triangle side
+      float side = dot(vec2(b.y - c.y, c.x - b.x), vec2(p.x - b.x, p.y - b.y)); // right side
+      if (side > 0) {
+         a = b;
+         b = c;
+      }
+      side = dot(vec2(c.y - a.y, a.x - c.x), vec2(p.x - c.x, p.y - c.y));
+      if (side > 0) {
+         b = a;
+         a = c;
+      }
+
       bool result = false;
       for (int i = 0; i < MAX_ITERATIONS && !result; i++) {
          result = koch_curve(p, a, b);
