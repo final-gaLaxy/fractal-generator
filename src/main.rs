@@ -52,7 +52,17 @@ fn main() {
         &indices).unwrap();
 
     // Handle window events
+    let mut frames = 0;
+    let mut start = std::time::Instant::now();
     let _ = event_loop.run(move |event, window_target| {
+        let elapsed = start.elapsed();
+        frames += 1;
+        if elapsed.as_secs() >= 1 {
+            println!("{:.0}", frames as f64 / elapsed.as_millis() as f64 * 1000.0);
+            start = std::time::Instant::now();
+            frames = 0;
+        }
+
         match event {
             WindowEvent { event, .. } => match event {
                 CloseRequested => window_target.exit(),
