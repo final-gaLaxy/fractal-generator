@@ -32,7 +32,7 @@ bool in_triangle(vec2 p, vec2 a, vec2 b, vec2 c) {
    float d11 = dot(v1, v1);
    float d12 = dot(v1, v2);
 
-   // Craner's Rule
+   // Cramer's Rule
    float denom = d00 * d11 - d01 * d01;
 
    // only use denom to check within range
@@ -42,13 +42,44 @@ bool in_triangle(vec2 p, vec2 a, vec2 b, vec2 c) {
    return !(v*denom < 0 || w*denom < 0 || abs(v + w) > denom);
 }
 
-void main() {
-   vec2 p = gl_FragCoord.xy/u_screenSize * 2 - 1;
-   vec2 a = vec2(0,0.5), b = vec2(-0.5, -0.5), c = vec2(0.5, -0.5);
+float sin60 = sqrt(3)/2; // sin(60deg)
+
+bool koch_curve(vec2 p, vec2 segStart, vec2 segEnd) {
+   // Create a equilateral triangle from segment
+   vec2 seg = segEnd - segStart;
+   vec2 a =   seg/3 + segStart;
+   vec2 b = 2*seg/3 + segStart;
+   vec2 c =   seg/2 + segStart + vec2(segStart.y - segEnd.y, segEnd.x - segStart.x)/3.0 * sin60;
+   // vec2 c = vec2(-0.539,0.144);
 
    if (in_triangle(p, a, b, c)) {
+      return true;
+   }
+   else {
+      return false;
+   }
+}
+
+vec2 center = vec2(0,sin60/4);
+float size = 1;
+
+void main() {
+   vec2 p = gl_FragCoord.xy/u_screenSize * 2 - 1;
+
+   vec2 a = vec2(-0.5,-sin60/2) * size + center,
+        b = vec2(0, sin60/2) * size + center,
+        c = vec2(0.5, -sin60/2) * size + center;
+
+   o_colour = vec4(1.0, 1.0, 1.0, 1.0);
+
+   // check in initial triangle
+   if (in_triangle(p, a, b, c)) {
       o_colour = vec4(0.0, 0.0, 0.0, 1.0);
-   } else {
-      o_colour = vec4(1.0, 1.0, 1.0, 1.0);
+   }
+
+   if (koch_curve(p, a, b) ||
+       koch_curve(p, b, c) ||
+       koch_curve(p, c, a)) {
+      o_colour = vec4(0.0, 0.0, 0.0, 1.0);
    }
 }
