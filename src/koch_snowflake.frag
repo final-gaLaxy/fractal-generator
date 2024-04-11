@@ -4,6 +4,7 @@ uniform vec2 u_screenSize; // screen size in pixels
 
 layout(location = 0) out vec4 o_colour; // output to colour buffer
 
+int ITERATIONS = 8; // >= 2
 float TAU = 6.28318530718;
 float scale = 1.;
 
@@ -21,5 +22,5 @@ float ifs(vec2 p, float angle, float scale, int n) {
 void main() {
    vec2 p = gl_FragCoord.xy / u_screenSize.x - 0.5;
    p = abs(p); // fold
-   o_colour += round(ifs(p, TAU/6, scale, 13));
+   o_colour += round(ifs(p, TAU/6, scale, 1+2*ITERATIONS));
 }
