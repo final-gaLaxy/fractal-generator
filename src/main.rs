@@ -71,7 +71,7 @@ fn main() {
                 },
                 RedrawRequested => {
                     let mut target = display.draw();
-                    target.clear_color(1.0, 1.0, 1.0, 1.0);
+                    target.clear_color_and_depth((1.0, 1.0, 1.0, 1.0), 1.0);
 
                     let screen_size = display.get_framebuffer_dimensions();
 
