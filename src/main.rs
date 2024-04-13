@@ -1,96 +1,203 @@
-#[macro_use]
-extern crate glium;
-extern crate glow;
+use std::error::Error;
+use std::num::NonZeroU32;
 
-use glium::{implement_vertex, Surface};
-use winit::event::WindowEvent::{CloseRequested, Resized, RedrawRequested};
-use winit::event::Event::{WindowEvent, AboutToWait};
+use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
-#[derive(Copy, Clone)]
-struct Vertex {
-    a_position: [f32; 2],
+use raw_window_handle::HasRawWindowHandle;
+
+use winit::{
+    dpi::LogicalSize, event::{Event, WindowEvent}, event_loop:: {EventLoop, EventLoopBuilder}, window::WindowBuilder
+};
+
+use glutin::{
+    config::{Config, ConfigTemplateBuilder, GlConfig},
+    context::{ContextAttributesBuilder, NotCurrentGlContext},
+    display::{GetGlDisplay, GlDisplay},
+    surface::{GlSurface, SwapInterval, WindowSurface},
+};
+
+use glutin_winit::{DisplayBuilder, GlWindow};
+
+fn main()-> Result<(), Box<dyn Error>> {
+    unsafe {
+        // Create context from a winit window
+        let (gl, gl_surface, gl_context, _window, event_loop) = create_context();
+
+        // Create shader program from source
+        let program = create_program(&gl, include_str!("simple.vert"), include_str!("mandelbrot.frag"));
+        gl.use_program(Some(program));
+
+        // Create vertex buffer and vertex array object
+        let (_vbo, _vao) = create_vertex_buffer(&gl);
+
+        // Set uniform
+        set_uniform(&gl, program, "u_screenSize", [800.0, 800.0]);
+
+        gl.clear_color(1.0, 1.0, 1.0, 1.0);
+
+        let _ = event_loop.run(move |event, elwt| {
+            if let Event::WindowEvent { event, .. } = event {
+                match event {
+                    WindowEvent::CloseRequested => {
+                        elwt.exit();
+                    },
+                    WindowEvent::RedrawRequested => {
+                        gl.clear(glow::COLOR_BUFFER_BIT);
+                        gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
+                        gl_surface.swap_buffers(&gl_context).unwrap()
+                    },
+                    _ => (),
+                }
+            }
+        });
+
+        Ok(())
+    }
 }
-implement_vertex!(Vertex, a_position);
 
-fn main() {
+unsafe fn create_context() -> (
+    glow::Context,
+    glutin::surface::Surface<WindowSurface>,
+    glutin::context::PossiblyCurrentContext,
+    winit::window::Window,
+    EventLoop<()>,
+) {
     // Create event loop
-    let event_loop = winit::event_loop::EventLoopBuilder::new()
+    let event_loop = EventLoopBuilder::new()
     .build()
     .expect("event loop building");
 
-    // Create window
-    let (window, display) = glium::backend::glutin::SimpleWindowBuilder::new()
+    // Windows requires the window before display creation
+    let window_builder = WindowBuilder::new()
+        .with_transparent(true)
         .with_title("Fractal Generator")
-        .with_inner_size(800, 800)
-        .build(&event_loop);
+        .with_inner_size(LogicalSize::new(800, 800));
 
-    // Compile shaders
-    let program = glium::Program::from_source(
-        &display,
-        include_str!("simple.vert"),
-        include_str!("koch_snowflake.frag"),
-        None).unwrap();
+    let template = ConfigTemplateBuilder::new().with_alpha_size(8);
 
-    // Render Square
-    let vertices = vec![
-        Vertex { a_position: [-1.0, -1.0] },
-        Vertex { a_position: [ 1.0, -1.0] },
-        Vertex { a_position: [ 1.0,  1.0] },
-        Vertex { a_position: [-1.0,  1.0] }
-    ];
+    let display_builder = DisplayBuilder::new().with_window_builder(Some(window_builder));
 
-    let indices: [u32; 6] =  [
-        0, 1, 2,
-        0, 2, 3
-    ];
+    let (window, gl_config) = display_builder
+        .build(
+            &event_loop,
+            template,
+            gl_config_picker
+        )
+        .unwrap();
 
-    let vertex_buffer = glium::VertexBuffer::new(
-        &display,
-        &vertices).unwrap();
-    let indices = glium::IndexBuffer::new(
-        &display,
-        glium::index::PrimitiveType::TrianglesList,
-        &indices).unwrap();
+    let raw_window_handle = window.as_ref().map(|window| window.raw_window_handle());
 
-    // Handle window events
-    let mut frames = 0;
-    let mut start = std::time::Instant::now();
-    let _ = event_loop.run(move |event, window_target| {
-        let elapsed = start.elapsed();
-        frames += 1;
-        if elapsed.as_secs() >= 1 {
-            println!("{:.0}", frames as f64 / elapsed.as_millis() as f64 * 1000.0);
-            start = std::time::Instant::now();
-            frames = 0;
-        }
+    let gl_display = gl_config.display();
 
-        match event {
-            WindowEvent { event, .. } => match event {
-                CloseRequested => window_target.exit(),
-                Resized(window_size) => {
-                    display.resize(window_size.into())
-                },
-                RedrawRequested => {
-                    let mut target = display.draw();
-                    target.clear_color_and_depth((1.0, 1.0, 1.0, 1.0), 1.0);
+    // Context creation
+    let context_attributes = ContextAttributesBuilder::new()
+        .build(raw_window_handle);
 
-                    let screen_size = display.get_framebuffer_dimensions();
+    let not_current_gl_context = gl_display
+        .create_context(&gl_config, &context_attributes)
+        .expect("failed to create context");
 
-                    let uniforms = uniform! {
-                        u_screenSize: [screen_size.0 as f32, screen_size.1 as f32]
-                    };
+    let window = window.unwrap();
 
-                    target.draw(&vertex_buffer, &indices, &program, &uniforms,
-                        &Default::default()).unwrap();
+    // Create surface
+    let attrs = window.build_surface_attributes(Default::default());
+    let gl_surface = gl_display
+        .create_window_surface(&gl_config, &attrs)
+        .unwrap();
 
-                    target.finish().unwrap();
-                },
-                _ => ()
-            },
-            AboutToWait => {
-                window.request_redraw();
-            },
-            _ => (),
-        };
+    // Make context current
+    let gl_context = not_current_gl_context.make_current(&gl_surface).unwrap();
+
+    let gl = glow::Context::from_loader_function_cstr(move|s| {
+        gl_display.get_proc_address(s) as *const _
     });
+
+    gl_surface
+        .set_swap_interval(&gl_context, SwapInterval::Wait(NonZeroU32::new(1).unwrap()))
+        .unwrap();
+
+    (gl, gl_surface, gl_context, window, event_loop)
+}
+
+pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> +'_>) -> Config {
+    configs.reduce(|accum, config| {
+        let transparency_check = config.supports_transparency().unwrap_or(false)
+            & !accum.supports_transparency().unwrap_or(false);
+
+        if transparency_check || config.num_samples() > accum.num_samples() {
+            config
+        } else {
+            accum
+        }
+    })
+    .unwrap()
+}
+
+unsafe fn create_program(
+    gl: &glow::Context,
+    vertex_shader_source: &str,
+    fragment_shader_source: &str,
+) -> glow::NativeProgram {
+    let program = gl.create_program().expect("Cannot create program");
+
+    let shader_sources = [
+        (glow::VERTEX_SHADER, vertex_shader_source),
+        (glow::FRAGMENT_SHADER, fragment_shader_source)
+    ];
+
+    let mut shaders = Vec::with_capacity(shader_sources.len());
+
+    for (shader_type, shader_source) in shader_sources.iter() {
+        let shader = gl
+            .create_shader(*shader_type)
+            .expect("Cannot create shader");
+        gl.shader_source(shader, &format!("{}", shader_source));
+        gl.compile_shader(shader);
+        if !gl.get_shader_compile_status(shader) {
+            panic!("{}", gl.get_shader_info_log(shader));
+        }
+        gl.attach_shader(program, shader);
+        shaders.push(shader);
+    }
+
+    gl.link_program(program);
+    if !gl.get_program_link_status(program) {
+        panic!("{}", gl.get_program_info_log(program));
+    }
+
+    for shader in shaders {
+        gl.detach_shader(program, shader);
+        gl.delete_shader(shader);
+    }
+
+    program
+}
+
+unsafe fn create_vertex_buffer(gl: &glow::Context) -> (NativeBuffer, NativeVertexArray) {
+    let vertices: [f32; 8] = [
+        -1.0, -1.0,
+         1.0, -1.0,
+         1.0,  1.0,
+        -1.0,  1.0,
+    ];
+    let vertices_u8: &[u8] = core::slice::from_raw_parts(
+        vertices.as_ptr() as *const u8,
+        vertices.len() * core::mem::size_of::<f32>(),
+    );
+
+    let vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, vertices_u8, glow::STATIC_DRAW);
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+    gl.enable_vertex_attrib_array(0);
+    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+    (vbo, vao)
+}
+
+unsafe fn set_uniform(gl: &glow::Context, program: NativeProgram, name: &str, value: [f32; 2]) {
+    let location = gl.get_uniform_location(program, name);
+    gl.uniform_2_f32(location.as_ref(), value[0], value[1]);
 }
