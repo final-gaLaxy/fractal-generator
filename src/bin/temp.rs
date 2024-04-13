@@ -1,14 +1,12 @@
 use std::error::Error;
 use std::num::NonZeroU32;
 
-use glow::HasContext;
+use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
 
 use winit::{
-    event::{Event, WindowEvent},
-    event_loop:: {EventLoop, EventLoopBuilder},
-    window::WindowBuilder,
+    dpi::LogicalSize, event::{Event, WindowEvent}, event_loop:: {EventLoop, EventLoopBuilder}, window::WindowBuilder
 };
 
 use glutin::{
@@ -29,7 +27,13 @@ fn main()-> Result<(), Box<dyn Error>> {
         let program = create_program(&gl, include_str!("simple.vert"), include_str!("mandelbrot.frag"));
         gl.use_program(Some(program));
 
-        gl.clear_color(0.1, 0.2, 0.3, 1.0);
+        // Create vertex buffer and vertex array object
+        let (_vbo, _vao) = create_vertex_buffer(&gl);
+
+        // Set uniform
+        set_uniform(&gl, program, "u_screenSize", [800.0, 800.0]);
+
+        gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
         let _ = event_loop.run(move |event, elwt| {
             if let Event::WindowEvent { event, .. } = event {
@@ -39,7 +43,7 @@ fn main()-> Result<(), Box<dyn Error>> {
                     },
                     WindowEvent::RedrawRequested => {
                         gl.clear(glow::COLOR_BUFFER_BIT);
-                        gl.draw_arrays(glow::TRIANGLES, 0, 3);
+                        gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
                         gl_surface.swap_buffers(&gl_context).unwrap()
                     },
                     _ => (),
@@ -66,7 +70,8 @@ unsafe fn create_context() -> (
     // Windows requires the window before display creation
     let window_builder = WindowBuilder::new()
         .with_transparent(true)
-        .with_title("Fractal Generator");
+        .with_title("Fractal Generator")
+        .with_inner_size(LogicalSize::new(800, 800));
 
     let template = ConfigTemplateBuilder::new().with_alpha_size(8);
 
@@ -114,6 +119,20 @@ unsafe fn create_context() -> (
     (gl, gl_surface, gl_context, window, event_loop)
 }
 
+pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> +'_>) -> Config {
+    configs.reduce(|accum, config| {
+        let transparency_check = config.supports_transparency().unwrap_or(false)
+            & !accum.supports_transparency().unwrap_or(false);
+
+        if transparency_check || config.num_samples() > accum.num_samples() {
+            config
+        } else {
+            accum
+        }
+    })
+    .unwrap()
+}
+
 unsafe fn create_program(
     gl: &glow::Context,
     vertex_shader_source: &str,
@@ -154,16 +173,31 @@ unsafe fn create_program(
     program
 }
 
-pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> +'_>) -> Config {
-    configs.reduce(|accum, config| {
-        let transparency_check = config.supports_transparency().unwrap_or(false)
-            & !accum.supports_transparency().unwrap_or(false);
+unsafe fn create_vertex_buffer(gl: &glow::Context) -> (NativeBuffer, NativeVertexArray) {
+    let vertices: [f32; 8] = [
+        -1.0, -1.0,
+         1.0, -1.0,
+         1.0,  1.0,
+        -1.0,  1.0,
+    ];
+    let vertices_u8: &[u8] = core::slice::from_raw_parts(
+        vertices.as_ptr() as *const u8,
+        vertices.len() * core::mem::size_of::<f32>(),
+    );
 
-        if transparency_check || config.num_samples() > accum.num_samples() {
-            config
-        } else {
-            accum
-        }
-    })
-    .unwrap()
+    let vbo = gl.create_buffer().unwrap();
+    gl.bind_buffer(glow::ARRAY_BUFFER, Some(vbo));
+    gl.buffer_data_u8_slice(glow::ARRAY_BUFFER, vertices_u8, glow::STATIC_DRAW);
+
+    let vao = gl.create_vertex_array().unwrap();
+    gl.bind_vertex_array(Some(vao));
+    gl.enable_vertex_attrib_array(0);
+    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+
+    (vbo, vao)
+}
+
+unsafe fn set_uniform(gl: &glow::Context, program: NativeProgram, name: &str, value: [f32; 2]) {
+    let location = gl.get_uniform_location(program, name);
+    gl.uniform_2_f32(location.as_ref(), value[0], value[1]);
 }
