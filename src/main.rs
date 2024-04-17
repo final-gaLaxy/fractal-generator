@@ -1,6 +1,9 @@
+extern crate nalgebra_glm as glm;
+
 use std::error::Error;
 use std::num::NonZeroU32;
 
+use glm::{vec2, TVec, Vec2};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
@@ -29,7 +32,14 @@ fn main()-> Result<(), Box<dyn Error>> {
         gl.clear_color(0.0, 0.0, 0.0, 1.0);
 
         // Create vertex buffer and vertex array object
-        let (_vbo, _vao) = create_vertex_buffer(&gl);
+        let vertices: [Vec2; 4] = [
+            vec2(-1.0, -1.0),
+            vec2(1.0, -1.0),
+            vec2(1.0,  1.0),
+            vec2(-1.0,  1.0),
+        ];
+
+        let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
 
         // Set uniform
         set_uniform(&gl, program, "u_screenSize", [800.0, 800.0]);
@@ -174,16 +184,10 @@ unsafe fn create_program(
     program
 }
 
-unsafe fn create_vertex_buffer(gl: &glow::Context) -> (NativeBuffer, NativeVertexArray) {
-    let vertices: [f32; 8] = [
-        -1.0, -1.0,
-         1.0, -1.0,
-         1.0,  1.0,
-        -1.0,  1.0,
-    ];
+unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[glm::TVec<f32, D>]) -> (NativeBuffer, NativeVertexArray) {
     let vertices_u8: &[u8] = core::slice::from_raw_parts(
         vertices.as_ptr() as *const u8,
-        vertices.len() * core::mem::size_of::<f32>(),
+        vertices.len() * core::mem::size_of::<TVec<f32, D>>(),
     );
 
     let vbo = gl.create_buffer().unwrap();
