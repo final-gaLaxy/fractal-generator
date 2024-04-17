@@ -29,7 +29,6 @@ fn main()-> Result<(), Box<dyn Error>> {
         // Create shader program from source
         let program = create_program(&gl, include_str!("simple.vert"), include_str!("mandelbrot.frag"));
         gl.use_program(Some(program));
-        gl.clear_color(0.0, 0.0, 0.0, 1.0);
 
         // Create vertex buffer and vertex array object
         let vertices: [Vec2; 4] = [
