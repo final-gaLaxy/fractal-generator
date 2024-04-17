@@ -3,7 +3,7 @@ extern crate nalgebra as na;
 use std::error::Error;
 use std::num::NonZeroU32;
 
-use na::{Matrix, Matrix4, SMatrix, SVector, Vector2, Vector4};
+use na::{Matrix4, SMatrix, SVector, Vector2, Vector3, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
@@ -20,6 +20,11 @@ use glutin::{
 };
 
 use glutin_winit::{DisplayBuilder, GlWindow};
+
+struct Camera {
+    view: Matrix4<f32>,
+    projection: Matrix4<f32>
+}
 
 fn main()-> Result<(), Box<dyn Error>> {
     unsafe {
@@ -40,8 +45,17 @@ fn main()-> Result<(), Box<dyn Error>> {
 
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
 
+        // Initialise Camera
+        let mut cam: Camera = Camera {
+            view: Matrix4::<f32>::identity(),
+            projection: Matrix4::<f32>::identity()
+        };
+
+        cam.view = cam.view.append_translation(&Vector3::new(0.0, 0.0, 0.0));
+        cam.projection = cam.projection.scale(0.5);
+
         // Create MVP matrix
-        let mut mvp: Matrix4<f32> = Matrix::new_scaling(0.5);
+        let mut mvp: Matrix4<f32> = cam.projection * cam.view;
         mvp = mvp.try_inverse().unwrap();
 
         // Set uniform
