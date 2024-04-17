@@ -41,7 +41,7 @@ fn main()-> Result<(), Box<dyn Error>> {
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
 
         // Set uniform
-        set_uniform(&gl, program, "u_screenSize", [800.0, 800.0]);
+        set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
@@ -201,7 +201,22 @@ unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[S
     (vbo, vao)
 }
 
-unsafe fn set_uniform(gl: &glow::Context, program: NativeProgram, name: &str, value: [f32; 2]) {
+unsafe fn set_uniform<const R: usize, const C: usize>(gl: &glow::Context, program: NativeProgram, name: &str, value: SMatrix<f32, R, C>) {
     let location = gl.get_uniform_location(program, name);
-    gl.uniform_2_f32(location.as_ref(), value[0], value[1]);
+    match C {
+        1 => {
+            match R {
+                1 => gl.uniform_1_f32(location.as_ref(), value[0]),
+                2 => gl.uniform_2_f32(location.as_ref(), value[0], value[1]),
+                _ => (),
+            }
+        },
+        4 => {
+            match R {
+                4 => gl.uniform_matrix_4_f32_slice(location.as_ref(), false, value.as_slice()),
+                _ => (),
+            }
+        },
+        _ => (),
+    }
 }
