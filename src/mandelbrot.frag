@@ -1,6 +1,6 @@
 #version 410
 
-in vec2 v_position;
+in vec4 v_position;
 
 uniform vec2 u_screenSize; // screen size in pixels
 
@@ -13,9 +13,10 @@ vec2 mandelbrot(vec2 z, vec2 c) {
 }
 
 void main() {
-   vec2 z = v_position;
+   vec2 p = v_position.xy;
+   vec2 z = p;
    for (int i = 0; i < ITERATIONS-1; i++) {
-      z = mandelbrot(z, v_position);
+      z = mandelbrot(z, p);
    }
 
    if (length(z) <= 1) {

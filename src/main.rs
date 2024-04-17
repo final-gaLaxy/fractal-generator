@@ -3,7 +3,7 @@ extern crate nalgebra as na;
 use std::error::Error;
 use std::num::NonZeroU32;
 
-use na::{Matrix, Matrix4, SMatrix, SVector, Vector2};
+use na::{Matrix, Matrix4, SMatrix, SVector, Vector2, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
@@ -31,11 +31,11 @@ fn main()-> Result<(), Box<dyn Error>> {
         gl.use_program(Some(program));
 
         // Create vertex buffer and vertex array object
-        let vertices: [Vector2<f32>; 4] = [
-            Vector2::new(-1.0, -1.0),
-            Vector2::new(1.0, -1.0),
-            Vector2::new(1.0,  1.0),
-            Vector2::new(-1.0,  1.0),
+        let vertices: [Vector4<f32>; 4] = [
+            Vector4::new(-1.0, -1.0, 0.0, 1.0),
+            Vector4::new(1.0, -1.0, 0.0, 1.0),
+            Vector4::new(1.0,  1.0, 0.0, 1.0),
+            Vector4::new(-1.0,  1.0, 0.0, 1.0),
         ];
 
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
@@ -196,7 +196,7 @@ unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[S
     let vao = gl.create_vertex_array().unwrap();
     gl.bind_vertex_array(Some(vao));
     gl.enable_vertex_attrib_array(0);
-    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+    gl.vertex_attrib_pointer_f32(0, D as i32, glow::FLOAT, false, 0, 0);
 
     (vbo, vao)
 }

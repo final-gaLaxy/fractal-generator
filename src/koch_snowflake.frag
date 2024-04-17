@@ -1,6 +1,6 @@
 #version 410
 
-in vec2 v_position;
+in vec4 v_position;
 
 uniform vec2 u_screenSize; // screen size in pixels
 
@@ -22,7 +22,7 @@ float ifs(vec2 p, float angle, float scale, int n) {
 }
 
 void main() {
-   vec2 p = v_position/2;
+   vec2 p = v_position.xy/2;
    p = abs(p); // fold
    o_colour += round(ifs(p, TAU/6, scale, 1+2*ITERATIONS));
    o_colour.a = 1;

@@ -1,11 +1,11 @@
 #version 410
 
-in vec2 a_position;	/* vertex position */
+in vec4 a_position;	/* vertex position */
 
-out vec2 v_position;
+out vec4 v_position;
 
 void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
+    gl_Position = a_position;
     v_position = a_position;
 }
 
