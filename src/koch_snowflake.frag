@@ -23,4 +23,5 @@ void main() {
    vec2 p = gl_FragCoord.xy / u_screenSize.x - 0.5;
    p = abs(p); // fold
    o_colour += round(ifs(p, TAU/6, scale, 1+2*ITERATIONS));
+   o_colour.a = 1;
 }
