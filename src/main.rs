@@ -1,9 +1,9 @@
-extern crate nalgebra_glm as glm;
+extern crate nalgebra as na;
 
 use std::error::Error;
 use std::num::NonZeroU32;
 
-use glm::{vec2, TVec, Vec2};
+use na::{Matrix4, SMatrix, SVector, Vector2, Vector3, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
@@ -21,6 +21,11 @@ use glutin::{
 
 use glutin_winit::{DisplayBuilder, GlWindow};
 
+struct Camera {
+    view: Matrix4<f32>,
+    projection: Matrix4<f32>
+}
+
 fn main()-> Result<(), Box<dyn Error>> {
     unsafe {
         // Create context from a winit window
@@ -31,17 +36,31 @@ fn main()-> Result<(), Box<dyn Error>> {
         gl.use_program(Some(program));
 
         // Create vertex buffer and vertex array object
-        let vertices: [Vec2; 4] = [
-            vec2(-1.0, -1.0),
-            vec2(1.0, -1.0),
-            vec2(1.0,  1.0),
-            vec2(-1.0,  1.0),
+        let vertices: [Vector4<f32>; 4] = [
+            Vector4::new(-1.0, -1.0, 0.0, 1.0),
+            Vector4::new(1.0, -1.0, 0.0, 1.0),
+            Vector4::new(1.0,  1.0, 0.0, 1.0),
+            Vector4::new(-1.0,  1.0, 0.0, 1.0),
         ];
 
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
 
+        // Initialise Camera
+        let mut cam: Camera = Camera {
+            view: Matrix4::<f32>::identity(),
+            projection: Matrix4::<f32>::identity()
+        };
+
+        cam.view = cam.view.append_translation(&Vector3::new(0.0, 0.0, 0.0));
+        cam.projection = cam.projection.scale(0.5);
+
+        // Create MVP matrix
+        let mut mvp: Matrix4<f32> = cam.projection * cam.view;
+        mvp = mvp.try_inverse().unwrap();
+
         // Set uniform
-        set_uniform(&gl, program, "u_screenSize", [800.0, 800.0]);
+        set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
+        set_uniform(&gl, program, "u_mvpMatrix", mvp);
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
@@ -183,10 +202,10 @@ unsafe fn create_program(
     program
 }
 
-unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[glm::TVec<f32, D>]) -> (NativeBuffer, NativeVertexArray) {
+unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[SVector<f32, D>]) -> (NativeBuffer, NativeVertexArray) {
     let vertices_u8: &[u8] = core::slice::from_raw_parts(
         vertices.as_ptr() as *const u8,
-        vertices.len() * core::mem::size_of::<TVec<f32, D>>(),
+        vertices.len() * core::mem::size_of::<SVector<f32, D>>(),
     );
 
     let vbo = gl.create_buffer().unwrap();
@@ -196,12 +215,27 @@ unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[g
     let vao = gl.create_vertex_array().unwrap();
     gl.bind_vertex_array(Some(vao));
     gl.enable_vertex_attrib_array(0);
-    gl.vertex_attrib_pointer_f32(0, 2, glow::FLOAT, false, 8, 0);
+    gl.vertex_attrib_pointer_f32(0, D as i32, glow::FLOAT, false, 0, 0);
 
     (vbo, vao)
 }
 
-unsafe fn set_uniform(gl: &glow::Context, program: NativeProgram, name: &str, value: [f32; 2]) {
+unsafe fn set_uniform<const R: usize, const C: usize>(gl: &glow::Context, program: NativeProgram, name: &str, value: SMatrix<f32, R, C>) {
     let location = gl.get_uniform_location(program, name);
-    gl.uniform_2_f32(location.as_ref(), value[0], value[1]);
+    match C {
+        1 => {
+            match R {
+                1 => gl.uniform_1_f32(location.as_ref(), value[0]),
+                2 => gl.uniform_2_f32(location.as_ref(), value[0], value[1]),
+                _ => (),
+            }
+        },
+        4 => {
+            match R {
+                4 => gl.uniform_matrix_4_f32_slice(location.as_ref(), false, value.as_slice()),
+                _ => (),
+            }
+        },
+        _ => (),
+    }
 }

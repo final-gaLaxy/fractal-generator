@@ -1,8 +1,14 @@
 #version 410
 
-in vec2 a_position;	/* vertex position */
+in vec4 a_position;	/* vertex position */
+
+uniform mat4 u_mvpMatrix;
+
+out vec4 v_position;
 
 void main() {
-    gl_Position = vec4(a_position, 0.0, 1.0);
+    vec4 p = u_mvpMatrix * a_position;
+    gl_Position = a_position;
+    v_position = p;
 }
 

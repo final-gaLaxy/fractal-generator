@@ -1,5 +1,7 @@
 #version 410
 
+in vec4 v_position;
+
 uniform vec2 u_screenSize; // screen size in pixels
 
 layout(location = 0) out vec4 o_colour;	// output to colour buffer
@@ -11,11 +13,10 @@ vec2 mandelbrot(vec2 z, vec2 c) {
 }
 
 void main() {
-   vec2 c = gl_FragCoord.xy/u_screenSize * 2 - 1;
-
-   vec2 z = c;
+   vec2 p = v_position.xy;
+   vec2 z = p;
    for (int i = 0; i < ITERATIONS-1; i++) {
-      z = mandelbrot(z, c);
+      z = mandelbrot(z, p);
    }
 
    if (length(z) <= 1) {
