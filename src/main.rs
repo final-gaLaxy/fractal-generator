@@ -40,8 +40,13 @@ fn main()-> Result<(), Box<dyn Error>> {
 
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
 
+        // Create MVP matrix
+        let mut mvp: Matrix4<f32> = Matrix::new_scaling(0.5);
+        mvp = mvp.try_inverse().unwrap();
+
         // Set uniform
         set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
+        set_uniform(&gl, program, "u_mvpMatrix", mvp);
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
