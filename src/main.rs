@@ -1,7 +1,10 @@
 extern crate nalgebra as na;
 
-use std::error::Error;
-use std::num::NonZeroU32;
+use std::{
+    collections::HashSet,
+    error::Error,
+    num::NonZeroU32
+};
 
 use na::{Isometry3, Matrix4, SMatrix, SVector, Translation3, UnitQuaternion, Vector2, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
@@ -48,6 +51,23 @@ impl Camera {
     }
 }
 
+struct KeysPressed {
+    keys_down: HashSet<Key>
+}
+
+impl KeysPressed {
+    fn key_down(&self) -> bool {
+        !self.keys_down.is_empty()
+    }
+
+    fn set_key(&mut self, key: Key, state: ElementState) {
+        let _ = match state {
+            ElementState::Pressed => self.keys_down.insert(key),
+            ElementState::Released => self.keys_down.remove(&key)
+        };
+    }
+}
+
 fn main()-> Result<(), Box<dyn Error>> {
     unsafe {
         // Create context from a winit window
@@ -76,6 +96,8 @@ fn main()-> Result<(), Box<dyn Error>> {
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
+        let mut current_keys: KeysPressed = KeysPressed { keys_down: HashSet::new() };
+
         let _ = event_loop.run(move |event, elwt| {
             if let Event::WindowEvent { event, .. } = event {
                 match event {
@@ -83,6 +105,28 @@ fn main()-> Result<(), Box<dyn Error>> {
                         elwt.exit();
                     },
                     WindowEvent::RedrawRequested => {
+                        if current_keys.key_down() {
+                            for key in current_keys.keys_down.iter() {
+                                match key {
+                                    Key::Named(NamedKey::ArrowRight) => {
+                                        cam.pos.x += 0.01;
+                                    },
+                                    Key::Named(NamedKey::ArrowLeft) => {
+                                        cam.pos.x -= 0.01;
+                                    },
+                                    Key::Named(NamedKey::ArrowUp) => {
+                                        cam.pos.y += 0.01;
+                                    },
+                                    Key::Named(NamedKey::ArrowDown) => {
+                                        cam.pos.y -= 0.01;
+                                    },
+                                    _ => ()
+                                }
+                            }
+
+                            window.request_redraw()
+                        }
+
                         // Create MVP matrix
                         let mvp: Matrix4<f32> = cam.get_projection_matrix() * cam.get_view_matrix();
 
@@ -92,31 +136,22 @@ fn main()-> Result<(), Box<dyn Error>> {
 
                         gl.clear(glow::COLOR_BUFFER_BIT);
                         gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
-                        gl_surface.swap_buffers(&gl_context).unwrap()
+                        gl_surface.swap_buffers(&gl_context).unwrap();
                     },
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
                                 logical_key: key,
-                                state: ElementState::Pressed,
+                                state,
                                 ..
                             },
                         ..
                     } => match key.as_ref() {
-                        Key::Named(NamedKey::ArrowRight) => {
-                            cam.pos.x += 0.01;
-                            window.request_redraw();
-                        },
-                        Key::Named(NamedKey::ArrowLeft) => {
-                            cam.pos.x -= 0.01;
-                            window.request_redraw();
-                        },
-                        Key::Named(NamedKey::ArrowUp) => {
-                            cam.pos.y += 0.01;
-                            window.request_redraw();
-                        },
+                        Key::Named(NamedKey::ArrowRight)    |
+                        Key::Named(NamedKey::ArrowLeft)     |
+                        Key::Named(NamedKey::ArrowUp)       |
                         Key::Named(NamedKey::ArrowDown) => {
-                            cam.pos.y -= 0.01;
+                            current_keys.set_key(key, state);
                             window.request_redraw();
                         },
                         _ => ()
