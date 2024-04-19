@@ -1,15 +1,22 @@
 extern crate nalgebra as na;
 
-use std::error::Error;
-use std::num::NonZeroU32;
+use std::{
+    collections::HashSet,
+    error::Error,
+    num::NonZeroU32
+};
 
-use na::{Matrix4, SMatrix, SVector, Vector2, Vector3, Vector4};
+use na::{Matrix4, Orthographic3, Rotation3, SMatrix, SVector, Scale3, Translation3, Vector2, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
 
 use winit::{
-    dpi::LogicalSize, event::{Event, WindowEvent}, event_loop:: {EventLoop, EventLoopBuilder}, window::WindowBuilder
+    dpi::LogicalSize,
+    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event_loop:: {EventLoop, EventLoopBuilder},
+    keyboard::{Key, NamedKey},
+    window::WindowBuilder
 };
 
 use glutin::{
@@ -22,14 +29,52 @@ use glutin::{
 use glutin_winit::{DisplayBuilder, GlWindow};
 
 struct Camera {
-    view: Matrix4<f32>,
-    projection: Matrix4<f32>
+    pos: Translation3<f32>,
+    angle: Rotation3<f32>,
+    scale: Scale3<f32>,
+}
+
+impl Camera {
+    fn get_view_matrix(&self) -> Matrix4<f32> {
+        let view_matrix: Matrix4<f32> = self.pos.to_homogeneous() * self.angle.to_homogeneous();
+
+        view_matrix.try_inverse().unwrap()
+    }
+
+    fn get_projection_matrix(&self) -> Matrix4<f32> {
+        let ortho: Orthographic3<f32> = Orthographic3::new(
+            -1.0 * self.scale.x,
+            1.0 * self.scale.x,
+            -1.0 * self.scale.y,
+            1.0 * self.scale.y,
+            -1.0 * self.scale.z,
+            1.0 * self.scale.z
+        );
+        ortho.to_homogeneous()
+    }
+}
+
+struct KeysPressed {
+    keys_down: HashSet<Key>
+}
+
+impl KeysPressed {
+    fn key_down(&self) -> bool {
+        !self.keys_down.is_empty()
+    }
+
+    fn set_key(&mut self, key: Key, state: ElementState) {
+        let _ = match state {
+            ElementState::Pressed => self.keys_down.insert(key),
+            ElementState::Released => self.keys_down.remove(&key)
+        };
+    }
 }
 
 fn main()-> Result<(), Box<dyn Error>> {
     unsafe {
         // Create context from a winit window
-        let (gl, gl_surface, gl_context, _window, event_loop) = create_context();
+        let (gl, gl_surface, gl_context, window, event_loop) = create_context();
 
         // Create shader program from source
         let program = create_program(&gl, include_str!("simple.vert"), include_str!("mandelbrot.frag"));
@@ -47,22 +92,14 @@ fn main()-> Result<(), Box<dyn Error>> {
 
         // Initialise Camera
         let mut cam: Camera = Camera {
-            view: Matrix4::<f32>::identity(),
-            projection: Matrix4::<f32>::identity()
+            pos: Translation3::<f32>::identity(),
+            angle: Rotation3::<f32>::identity(),
+            scale: Scale3::<f32>::identity()
         };
 
-        cam.view = cam.view.append_translation(&Vector3::new(0.0, 0.0, 0.0));
-        cam.projection = cam.projection.scale(0.5);
-
-        // Create MVP matrix
-        let mut mvp: Matrix4<f32> = cam.projection * cam.view;
-        mvp = mvp.try_inverse().unwrap();
-
-        // Set uniform
-        set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
-        set_uniform(&gl, program, "u_mvpMatrix", mvp);
-
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
+
+        let mut current_keys: KeysPressed = KeysPressed { keys_down: HashSet::new() };
 
         let _ = event_loop.run(move |event, elwt| {
             if let Event::WindowEvent { event, .. } = event {
@@ -71,10 +108,75 @@ fn main()-> Result<(), Box<dyn Error>> {
                         elwt.exit();
                     },
                     WindowEvent::RedrawRequested => {
+                        if current_keys.key_down() {
+                            for key in current_keys.keys_down.clone().into_iter() {
+                                match key.as_ref() {
+                                    Key::Named(NamedKey::ArrowRight) => {
+                                        cam.pos.x -= 0.01 / cam.scale.x;
+                                    },
+                                    Key::Named(NamedKey::ArrowLeft) => {
+                                        cam.pos.x += 0.01 / cam.scale.x;
+                                    },
+                                    Key::Named(NamedKey::ArrowUp) => {
+                                        cam.pos.y -= 0.01 / cam.scale.y;
+                                    },
+                                    Key::Named(NamedKey::ArrowDown) => {
+                                        cam.pos.y += 0.01 / cam.scale.y;
+                                    },
+                                    Key::Character("w") => {
+                                        cam.scale *= 1.01;
+                                    },
+                                    Key::Character("s") => {
+                                        cam.scale *= 0.99;
+                                    },
+                                    Key::Character("d") => {
+                                        let (roll, pitch, yaw) = cam.angle.euler_angles();
+                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw - 0.01);
+                                    },
+                                    Key::Character("a") => {
+                                        let (roll, pitch, yaw) = cam.angle.euler_angles();
+                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw + 0.01);
+                                    },
+                                    _ => ()
+                                }
+                            }
+
+                            window.request_redraw()
+                        }
+
+                        // Create MVP matrix
+                        let mvp: Matrix4<f32> = cam.get_view_matrix() * cam.get_projection_matrix();
+
+                        // Set uniforms
+                        set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
+                        set_uniform(&gl, program, "u_mvpMatrix", mvp);
+
                         gl.clear(glow::COLOR_BUFFER_BIT);
                         gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
-                        gl_surface.swap_buffers(&gl_context).unwrap()
+                        gl_surface.swap_buffers(&gl_context).unwrap();
                     },
+                    WindowEvent::KeyboardInput {
+                        event:
+                            KeyEvent {
+                                logical_key: key,
+                                state,
+                                ..
+                            },
+                        ..
+                    } => match key.as_ref() {
+                        Key::Named(NamedKey::ArrowRight)    |
+                        Key::Named(NamedKey::ArrowLeft)     |
+                        Key::Named(NamedKey::ArrowUp)       |
+                        Key::Named(NamedKey::ArrowDown)     |
+                        Key::Character("w")                 |
+                        Key::Character("a")                 |
+                        Key::Character("s")                 |
+                        Key::Character("d") => {
+                            current_keys.set_key(key, state);
+                            window.request_redraw();
+                        },
+                        _ => ()
+                    }
                     _ => (),
                 }
             }
