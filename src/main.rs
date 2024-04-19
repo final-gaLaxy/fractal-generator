@@ -106,8 +106,8 @@ fn main()-> Result<(), Box<dyn Error>> {
                     },
                     WindowEvent::RedrawRequested => {
                         if current_keys.key_down() {
-                            for key in current_keys.keys_down.iter() {
-                                match key {
+                            for key in current_keys.keys_down.clone().into_iter() {
+                                match key.as_ref() {
                                     Key::Named(NamedKey::ArrowRight) => {
                                         cam.pos.x += 0.01;
                                     },
@@ -119,6 +119,12 @@ fn main()-> Result<(), Box<dyn Error>> {
                                     },
                                     Key::Named(NamedKey::ArrowDown) => {
                                         cam.pos.y -= 0.01;
+                                    },
+                                    Key::Character("w") => {
+                                        cam.scale *= 0.99;
+                                    },
+                                    Key::Character("s") => {
+                                        cam.scale *= 1.01;
                                     },
                                     _ => ()
                                 }
@@ -150,7 +156,11 @@ fn main()-> Result<(), Box<dyn Error>> {
                         Key::Named(NamedKey::ArrowRight)    |
                         Key::Named(NamedKey::ArrowLeft)     |
                         Key::Named(NamedKey::ArrowUp)       |
-                        Key::Named(NamedKey::ArrowDown) => {
+                        Key::Named(NamedKey::ArrowDown)     |
+                        Key::Character("w")                 |
+                        Key::Character("a")                 |
+                        Key::Character("s")                 |
+                        Key::Character("d") => {
                             current_keys.set_key(key, state);
                             window.request_redraw();
                         },
