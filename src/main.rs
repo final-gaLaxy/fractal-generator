@@ -6,7 +6,7 @@ use std::{
     num::NonZeroU32
 };
 
-use na::{Isometry3, Matrix4, SMatrix, SVector, Translation3, UnitQuaternion, Vector2, Vector4};
+use na::{Matrix4, Orthographic3, Rotation3, SMatrix, SVector, Scale3, Translation3, Vector2, Vector4};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
 
 use raw_window_handle::HasRawWindowHandle;
@@ -30,24 +30,27 @@ use glutin_winit::{DisplayBuilder, GlWindow};
 
 struct Camera {
     pos: Translation3<f32>,
-    angle: UnitQuaternion<f32>,
-    scale: f32,
+    angle: Rotation3<f32>,
+    scale: Scale3<f32>,
 }
 
 impl Camera {
     fn get_view_matrix(&self) -> Matrix4<f32> {
-        let mut view_matrix: Isometry3<f32> = Isometry3::identity();
-        view_matrix.append_translation_mut(&self.pos);
-        view_matrix.append_rotation_mut(&self.angle);
+        let view_matrix: Matrix4<f32> = self.pos.to_homogeneous() * self.angle.to_homogeneous();
 
-        view_matrix.to_homogeneous()
+        view_matrix.try_inverse().unwrap()
     }
 
     fn get_projection_matrix(&self) -> Matrix4<f32> {
-        let mut projection_matrix: Matrix4<f32> = Matrix4::identity();
-        projection_matrix.scale_mut(self.scale);
-
-        projection_matrix.try_inverse().unwrap()
+        let ortho: Orthographic3<f32> = Orthographic3::new(
+            -1.0 * self.scale.x,
+            1.0 * self.scale.x,
+            -1.0 * self.scale.y,
+            1.0 * self.scale.y,
+            -1.0 * self.scale.z,
+            1.0 * self.scale.z
+        );
+        ortho.to_homogeneous()
     }
 }
 
@@ -90,8 +93,8 @@ fn main()-> Result<(), Box<dyn Error>> {
         // Initialise Camera
         let mut cam: Camera = Camera {
             pos: Translation3::<f32>::identity(),
-            angle: UnitQuaternion::<f32>::identity(),
-            scale: 1.0
+            angle: Rotation3::<f32>::identity(),
+            scale: Scale3::<f32>::identity()
         };
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
@@ -109,22 +112,30 @@ fn main()-> Result<(), Box<dyn Error>> {
                             for key in current_keys.keys_down.clone().into_iter() {
                                 match key.as_ref() {
                                     Key::Named(NamedKey::ArrowRight) => {
-                                        cam.pos.x += 0.01;
+                                        cam.pos.x -= 0.01 / cam.scale.x;
                                     },
                                     Key::Named(NamedKey::ArrowLeft) => {
-                                        cam.pos.x -= 0.01;
+                                        cam.pos.x += 0.01 / cam.scale.x;
                                     },
                                     Key::Named(NamedKey::ArrowUp) => {
-                                        cam.pos.y += 0.01;
+                                        cam.pos.y -= 0.01 / cam.scale.y;
                                     },
                                     Key::Named(NamedKey::ArrowDown) => {
-                                        cam.pos.y -= 0.01;
+                                        cam.pos.y += 0.01 / cam.scale.y;
                                     },
                                     Key::Character("w") => {
-                                        cam.scale *= 0.99;
+                                        cam.scale *= 1.01;
                                     },
                                     Key::Character("s") => {
-                                        cam.scale *= 1.01;
+                                        cam.scale *= 0.99;
+                                    },
+                                    Key::Character("d") => {
+                                        let (roll, pitch, yaw) = cam.angle.euler_angles();
+                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw - 0.01);
+                                    },
+                                    Key::Character("a") => {
+                                        let (roll, pitch, yaw) = cam.angle.euler_angles();
+                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw + 0.01);
                                     },
                                     _ => ()
                                 }
