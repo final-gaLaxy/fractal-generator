@@ -145,7 +145,7 @@ fn main()-> Result<(), Box<dyn Error>> {
                         }
 
                         // Create MVP matrix
-                        let mvp: Matrix4<f32> = cam.get_projection_matrix() * cam.get_view_matrix();
+                        let mvp: Matrix4<f32> = cam.get_view_matrix() * cam.get_projection_matrix();
 
                         // Set uniforms
                         set_uniform(&gl, program, "u_screenSize", Vector2::new(800.0, 800.0));
