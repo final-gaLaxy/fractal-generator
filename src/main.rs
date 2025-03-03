@@ -1,32 +1,29 @@
 extern crate nalgebra as na;
 
-use std::{
-    collections::HashSet,
-    error::Error,
-    num::NonZeroU32
-};
-
-use na::{Matrix4, Orthographic3, Rotation3, SMatrix, SVector, Scale3, Translation3, Vector2, Vector4};
+use clap::{Arg, Command};
 use glow::{HasContext, NativeBuffer, NativeProgram, NativeVertexArray};
-
-use raw_window_handle::HasRawWindowHandle;
-
-use winit::{
-    dpi::LogicalSize,
-    event::{ElementState, Event, KeyEvent, WindowEvent},
-    event_loop:: {EventLoop, EventLoopBuilder},
-    keyboard::{Key, NamedKey},
-    window::WindowBuilder
-};
-
 use glutin::{
     config::{Config, ConfigTemplateBuilder, GlConfig},
     context::{ContextAttributesBuilder, NotCurrentGlContext},
     display::{GetGlDisplay, GlDisplay},
     surface::{GlSurface, SwapInterval, WindowSurface},
 };
-
 use glutin_winit::{DisplayBuilder, GlWindow};
+use na::{
+    Matrix4, Orthographic3, Rotation3, SMatrix, SVector, Scale3, Translation3, Vector2, Vector4,
+};
+use raw_window_handle::HasRawWindowHandle;
+use std::{
+    collections::HashSet, error::Error, fs::File, io::Read, num::NonZeroU32, path::Path,
+    process::exit,
+};
+use winit::{
+    dpi::LogicalSize,
+    event::{ElementState, Event, KeyEvent, WindowEvent},
+    event_loop::{EventLoop, EventLoopBuilder},
+    keyboard::{Key, NamedKey},
+    window::WindowBuilder,
+};
 
 struct Camera {
     pos: Translation3<f32>,
@@ -48,14 +45,14 @@ impl Camera {
             -1.0 * self.scale.y,
             1.0 * self.scale.y,
             -1.0 * self.scale.z,
-            1.0 * self.scale.z
+            1.0 * self.scale.z,
         );
         ortho.to_homogeneous()
     }
 }
 
 struct KeysPressed {
-    keys_down: HashSet<Key>
+    keys_down: HashSet<Key>,
 }
 
 impl KeysPressed {
@@ -66,26 +63,60 @@ impl KeysPressed {
     fn set_key(&mut self, key: Key, state: ElementState) {
         let _ = match state {
             ElementState::Pressed => self.keys_down.insert(key),
-            ElementState::Released => self.keys_down.remove(&key)
+            ElementState::Released => self.keys_down.remove(&key),
         };
     }
 }
 
-fn main()-> Result<(), Box<dyn Error>> {
+fn main() -> Result<(), Box<dyn Error>> {
     unsafe {
+        let args = Command::new("fractal")
+            .about("A real-time OpenGL renderer for fractals")
+            .arg(
+                Arg::new("mandelbrot")
+                    .short('m')
+                    .long("mandelbrot")
+                    .num_args(0)
+                    .help("Render the Mandelbrot set")
+                    .conflicts_with("koch-snowflake"),
+            )
+            .arg(
+                Arg::new("koch-snowflake")
+                    .short('k')
+                    .long("koch-snowflake")
+                    .num_args(0)
+                    .help("Render the Koch Snowflake fractal"),
+            )
+            .get_matches();
+
+        let fragment_shader = if args.get_flag("mandelbrot") {
+            "mandelbrot.frag"
+        } else {
+            "koch_snowflake.frag"
+        };
+
+        let fragment_shader =
+            match read_shader_file(Path::new("src").join(fragment_shader).to_str().unwrap()) {
+                Ok(contents) => contents,
+                Err(e) => {
+                    eprintln!("Failed to read the shader file: {}", e);
+                    exit(1)
+                }
+            };
+
         // Create context from a winit window
         let (gl, gl_surface, gl_context, window, event_loop) = create_context();
 
         // Create shader program from source
-        let program = create_program(&gl, include_str!("simple.vert"), include_str!("mandelbrot.frag"));
+        let program = create_program(&gl, include_str!("simple.vert"), &fragment_shader);
         gl.use_program(Some(program));
 
         // Create vertex buffer and vertex array object
         let vertices: [Vector4<f32>; 4] = [
             Vector4::new(-1.0, -1.0, 0.0, 1.0),
             Vector4::new(1.0, -1.0, 0.0, 1.0),
-            Vector4::new(1.0,  1.0, 0.0, 1.0),
-            Vector4::new(-1.0,  1.0, 0.0, 1.0),
+            Vector4::new(1.0, 1.0, 0.0, 1.0),
+            Vector4::new(-1.0, 1.0, 0.0, 1.0),
         ];
 
         let (_vbo, _vao) = create_vertex_buffer(&gl, &vertices);
@@ -94,50 +125,54 @@ fn main()-> Result<(), Box<dyn Error>> {
         let mut cam: Camera = Camera {
             pos: Translation3::<f32>::identity(),
             angle: Rotation3::<f32>::identity(),
-            scale: Scale3::<f32>::identity()
+            scale: Scale3::<f32>::identity(),
         };
 
         gl.clear_color(1.0, 1.0, 1.0, 1.0);
 
-        let mut current_keys: KeysPressed = KeysPressed { keys_down: HashSet::new() };
+        let mut current_keys: KeysPressed = KeysPressed {
+            keys_down: HashSet::new(),
+        };
 
         let _ = event_loop.run(move |event, elwt| {
             if let Event::WindowEvent { event, .. } = event {
                 match event {
                     WindowEvent::CloseRequested => {
                         elwt.exit();
-                    },
+                    }
                     WindowEvent::RedrawRequested => {
                         if current_keys.key_down() {
                             for key in current_keys.keys_down.clone().into_iter() {
                                 match key.as_ref() {
                                     Key::Named(NamedKey::ArrowRight) => {
                                         cam.pos.x -= 0.01 / cam.scale.x;
-                                    },
+                                    }
                                     Key::Named(NamedKey::ArrowLeft) => {
                                         cam.pos.x += 0.01 / cam.scale.x;
-                                    },
+                                    }
                                     Key::Named(NamedKey::ArrowUp) => {
                                         cam.pos.y -= 0.01 / cam.scale.y;
-                                    },
+                                    }
                                     Key::Named(NamedKey::ArrowDown) => {
                                         cam.pos.y += 0.01 / cam.scale.y;
-                                    },
+                                    }
                                     Key::Character("w") => {
                                         cam.scale *= 1.01;
-                                    },
+                                    }
                                     Key::Character("s") => {
                                         cam.scale *= 0.99;
-                                    },
+                                    }
                                     Key::Character("d") => {
                                         let (roll, pitch, yaw) = cam.angle.euler_angles();
-                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw - 0.01);
-                                    },
+                                        cam.angle =
+                                            Rotation3::from_euler_angles(roll, pitch, yaw - 0.01);
+                                    }
                                     Key::Character("a") => {
                                         let (roll, pitch, yaw) = cam.angle.euler_angles();
-                                        cam.angle = Rotation3::from_euler_angles(roll, pitch, yaw + 0.01);
-                                    },
-                                    _ => ()
+                                        cam.angle =
+                                            Rotation3::from_euler_angles(roll, pitch, yaw + 0.01);
+                                    }
+                                    _ => (),
                                 }
                             }
 
@@ -154,7 +189,7 @@ fn main()-> Result<(), Box<dyn Error>> {
                         gl.clear(glow::COLOR_BUFFER_BIT);
                         gl.draw_arrays(glow::TRIANGLE_FAN, 0, 4);
                         gl_surface.swap_buffers(&gl_context).unwrap();
-                    },
+                    }
                     WindowEvent::KeyboardInput {
                         event:
                             KeyEvent {
@@ -164,19 +199,19 @@ fn main()-> Result<(), Box<dyn Error>> {
                             },
                         ..
                     } => match key.as_ref() {
-                        Key::Named(NamedKey::ArrowRight)    |
-                        Key::Named(NamedKey::ArrowLeft)     |
-                        Key::Named(NamedKey::ArrowUp)       |
-                        Key::Named(NamedKey::ArrowDown)     |
-                        Key::Character("w")                 |
-                        Key::Character("a")                 |
-                        Key::Character("s")                 |
-                        Key::Character("d") => {
+                        Key::Named(NamedKey::ArrowRight)
+                        | Key::Named(NamedKey::ArrowLeft)
+                        | Key::Named(NamedKey::ArrowUp)
+                        | Key::Named(NamedKey::ArrowDown)
+                        | Key::Character("w")
+                        | Key::Character("a")
+                        | Key::Character("s")
+                        | Key::Character("d") => {
                             current_keys.set_key(key, state);
                             window.request_redraw();
-                        },
-                        _ => ()
-                    }
+                        }
+                        _ => (),
+                    },
                     _ => (),
                 }
             }
@@ -195,8 +230,8 @@ unsafe fn create_context() -> (
 ) {
     // Create event loop
     let event_loop = EventLoopBuilder::new()
-    .build()
-    .expect("event loop building");
+        .build()
+        .expect("event loop building");
 
     // Windows requires the window before display creation
     let window_builder = WindowBuilder::new()
@@ -209,11 +244,7 @@ unsafe fn create_context() -> (
     let display_builder = DisplayBuilder::new().with_window_builder(Some(window_builder));
 
     let (window, gl_config) = display_builder
-        .build(
-            &event_loop,
-            template,
-            gl_config_picker
-        )
+        .build(&event_loop, template, gl_config_picker)
         .unwrap();
 
     let raw_window_handle = window.as_ref().map(|window| window.raw_window_handle());
@@ -221,8 +252,7 @@ unsafe fn create_context() -> (
     let gl_display = gl_config.display();
 
     // Context creation
-    let context_attributes = ContextAttributesBuilder::new()
-        .build(raw_window_handle);
+    let context_attributes = ContextAttributesBuilder::new().build(raw_window_handle);
 
     let not_current_gl_context = gl_display
         .create_context(&gl_config, &context_attributes)
@@ -239,7 +269,7 @@ unsafe fn create_context() -> (
     // Make context current
     let gl_context = not_current_gl_context.make_current(&gl_surface).unwrap();
 
-    let gl = glow::Context::from_loader_function_cstr(move|s| {
+    let gl = glow::Context::from_loader_function_cstr(move |s| {
         gl_display.get_proc_address(s) as *const _
     });
 
@@ -250,18 +280,19 @@ unsafe fn create_context() -> (
     (gl, gl_surface, gl_context, window, event_loop)
 }
 
-pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> +'_>) -> Config {
-    configs.reduce(|accum, config| {
-        let transparency_check = config.supports_transparency().unwrap_or(false)
-            & !accum.supports_transparency().unwrap_or(false);
+pub fn gl_config_picker(configs: Box<dyn Iterator<Item = Config> + '_>) -> Config {
+    configs
+        .reduce(|accum, config| {
+            let transparency_check = config.supports_transparency().unwrap_or(false)
+                & !accum.supports_transparency().unwrap_or(false);
 
-        if transparency_check || config.num_samples() > accum.num_samples() {
-            config
-        } else {
-            accum
-        }
-    })
-    .unwrap()
+            if transparency_check || config.num_samples() > accum.num_samples() {
+                config
+            } else {
+                accum
+            }
+        })
+        .unwrap()
 }
 
 unsafe fn create_program(
@@ -273,7 +304,7 @@ unsafe fn create_program(
 
     let shader_sources = [
         (glow::VERTEX_SHADER, vertex_shader_source),
-        (glow::FRAGMENT_SHADER, fragment_shader_source)
+        (glow::FRAGMENT_SHADER, fragment_shader_source),
     ];
 
     let mut shaders = Vec::with_capacity(shader_sources.len());
@@ -304,7 +335,10 @@ unsafe fn create_program(
     program
 }
 
-unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[SVector<f32, D>]) -> (NativeBuffer, NativeVertexArray) {
+unsafe fn create_vertex_buffer<const D: usize>(
+    gl: &glow::Context,
+    vertices: &[SVector<f32, D>],
+) -> (NativeBuffer, NativeVertexArray) {
     let vertices_u8: &[u8] = core::slice::from_raw_parts(
         vertices.as_ptr() as *const u8,
         vertices.len() * core::mem::size_of::<SVector<f32, D>>(),
@@ -322,22 +356,32 @@ unsafe fn create_vertex_buffer<const D: usize>(gl: &glow::Context, vertices: &[S
     (vbo, vao)
 }
 
-unsafe fn set_uniform<const R: usize, const C: usize>(gl: &glow::Context, program: NativeProgram, name: &str, value: SMatrix<f32, R, C>) {
+unsafe fn set_uniform<const R: usize, const C: usize>(
+    gl: &glow::Context,
+    program: NativeProgram,
+    name: &str,
+    value: SMatrix<f32, R, C>,
+) {
     let location = gl.get_uniform_location(program, name);
     match C {
-        1 => {
-            match R {
-                1 => gl.uniform_1_f32(location.as_ref(), value[0]),
-                2 => gl.uniform_2_f32(location.as_ref(), value[0], value[1]),
-                _ => (),
-            }
+        1 => match R {
+            1 => gl.uniform_1_f32(location.as_ref(), value[0]),
+            2 => gl.uniform_2_f32(location.as_ref(), value[0], value[1]),
+            _ => (),
         },
-        4 => {
-            match R {
-                4 => gl.uniform_matrix_4_f32_slice(location.as_ref(), false, value.as_slice()),
-                _ => (),
-            }
+        4 => match R {
+            4 => gl.uniform_matrix_4_f32_slice(location.as_ref(), false, value.as_slice()),
+            _ => (),
         },
         _ => (),
     }
+}
+
+fn read_shader_file(file_path: &str) -> Result<String, std::io::Error> {
+    let mut file = File::open(file_path)?;
+
+    let mut contents = String::new();
+    file.read_to_string(&mut contents)?;
+
+    Ok(contents)
 }
